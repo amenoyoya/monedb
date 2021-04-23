@@ -1,0 +1,80 @@
+# ver 3.6 >= required: enable '-w' option for 'docker-compose exec'
+version: "3.8"
+
+networks:
+  # プロジェクト内仮想ネットワーク
+  ## 同一ネットワーク内の各コンテナはサービス名で双方向通信可能
+  appnet:
+    driver: bridge
+    # ネットワークIP範囲を指定する場合
+    # ipam:
+    #   driver: default
+    #   config:
+    #     # 仮想ネットワークのネットワーク範囲を指定
+    #     ## 172.68.0.0/16 の場合、172.68.0.1 ～ 172.68.255.254 のIPアドレスを割り振れる
+    #     ## ただし 172.68.0.1 はゲートウェイに使われる
+    #     - subnet: 172.68.0.0/16
+
+volumes:
+  # volume for mongodb service container
+  mongodb-data:
+    driver: local
+
+services:
+  # node service container: node:14-slim
+  node:
+    build:
+      context: ./docker/node/
+      args:
+        # use current working user id
+        USER_ID: $USER_ID
+    logging:
+      driver: json-file
+    networks:
+      - appnet
+    ports:
+      # http://localhost:{$NODE_PORT:-8080} => http://node:{$NODE_PORT:-8080}
+      - "${NODE_PORT:-8080}:${NODE_PORT:-8080}"
+    # enable terminal
+    tty: true
+    volumes:
+      # ./ => docker:/work/
+      - ./:/work/
+    environment:
+      TZ: Asia/Tokyo
+
+  # mongodb service container: mongo db v4.4
+  # mongodb://root:root@mongodb:27017
+  mongodb:
+    image: mongo:4.4
+    logging:
+      driver: json-file
+    networks:
+      - appnet
+    volumes:
+      # database data persistence
+      - mongodb-data:/data/db/
+      # initial data sharing
+      - ./docker/mongodb/initdb.d/:/docker-entrypoint-initdb.d/
+    working_dir: /docker-entrypoint-initdb.d/
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      TZ: Asia/Tokyo
+
+  # express service container: mongo-express:latest
+  express:
+    image: mongo-express:latest
+    logging:
+      driver: json-file
+    networks:
+      - appnet
+    ports:
+      # http://localhost:{$MONGO_EXPRESS_PORT:-27080} => http://express:8081
+      - ${MONGO_EXPRESS_PORT:-27080}:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: root
+      ME_CONFIG_MONGODB_SERVER: mongodb # service://mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      TZ: Asia/Tokyo
