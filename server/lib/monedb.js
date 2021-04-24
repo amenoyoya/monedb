@@ -6,11 +6,12 @@ const NeDB = require('nedb-promises');
 const fs = require('fs');
 const path = require('path');
 const omit = require('./omit');
+const Validator = require('./monedb/validator');
 
 /**
  * Check directory exists
  * @param {string} dirname 
- * @return {boolean}
+ * @returns {boolean}
  */
 function isDirectory(dirname) {
   try {
@@ -31,22 +32,26 @@ class Client {
    * @param {string} id_format = 'number'; Format of data._id
    *   - 'number': Format of _id like RDB such as MySQL (1, 2, 3, ...)
    *   - 'string': Default _id format of MongoDB and NeDB ('4W3JKyAaJNXGzo8b', ...)
+   * @param {object} validation_option
    */
-  constructor(url, id_format = 'number') {
+  constructor(url, id_format = 'number', validation_option = {}) {
     this.__format = id_format;
+    this.ajv = new Validator(validation_option);
 
     if (url.match(/^mongodb:/)) {
       // MongoDB Client
+      this.__type = 'mongodb';
       this.client = new MongoClient(url, { useNewUrlParser: true, useUnifiedTopology: true });
 
       /**
        * Get a list of databases
-       * @return {object[]} {name: string, sizeOnDisk: number, empty: boolean}[]
+       * @returns {object[]} {name: string, sizeOnDisk: number, empty: boolean}[]
        */
       this.client.databases = async () => (await this.client.db().admin().listDatabases()).databases;
     } else {
       // NeDB Client: provide API like MongoDB Client
       const collections = {};
+      this.__type = 'nedb';
       this.client = {
         /**
          * Dummy method for MongoClient.connect()
@@ -64,7 +69,7 @@ class Client {
 
         /**
          * Get a list of databases
-         * @return {object[]} {name: string}[]
+         * @returns {object[]} {name: string}[]
          */
         databases: async () => {
           try {
@@ -83,7 +88,7 @@ class Client {
         /**
          * Get database instance
          * @param {string} database 
-         * @return {object} {__type: 'nedb', database_path: string, collections: {*}}
+         * @returns {object} {__type: 'nedb', database_path: string, collections: {*}}
          */
         db: (database) => {
           if (!database.match(/[a-z0-9\-_#$@]+/i)) {
@@ -95,7 +100,6 @@ class Client {
             fs.mkdirSync(dir, {recursive: true});
           }
           return {
-            __type: 'nedb',
             database_path: dir,
             collections,
           };
@@ -106,7 +110,7 @@ class Client {
 
   /**
    * Connect to the MongoDB
-   * @return {*}
+   * @returns {*}
    */
   async connect() {
     return await this.client.connect();
@@ -115,17 +119,15 @@ class Client {
   /**
    * Get a database instance
    * @param {string} database_name
-   * @return {Database}
+   * @returns {Database}
    */
   db(database_name) {
-    const database = this.client.db(database_name);
-    database.__format = this.__format; // keep id format
-    return new Database(database);
+    return new Database(this, this.client.db(database_name));
   }
 
   /**
    * Get a list of databases
-   * @return {object[]} {name: string, ...}[]
+   * @returns {object[]} {name: string, ...}[]
    */
    async databases() {
     return await this.client.databases();
@@ -144,44 +146,42 @@ class Client {
  */
 class Database {
   /**
+   * @param {Client} client
    * @param {mongodb.Db} dbHandler
    */
-  constructor(dbHandler) {
+  constructor(client, dbHandler) {
+    this.client = client;
     this.db = dbHandler;
   }
 
   /**
    * Get a collection (table) object
    * @param {string} collection_name 
-   * @return {Collection}
+   * @param {object} validation_schema
+   * @returns {Collection}
    */
-  collection(collection_name) {
-    if (this.db.__type === 'nedb') {
+  collection(collection_name, validation_schema = {}) {
+    if (this.client.__type === 'nedb') {
       // NeDB
       if (!collection_name.match(/[a-z0-9\-_#$@]+/i)) {
         throw new Error('NeDB collection name allowed chars: [a-z][A-Z][1-9]-_')
       }
       const filename = path.join(this.db.database_path, `${collection_name}.table`);
       if (!this.db.collections[collection_name]) {
-        const nedb = new NeDB({filename, autoload: true});
-        nedb.__type = 'nedb';
-        nedb.__format = this.db.__format;
-        this.db.collections[collection_name] = nedb;
+        this.db.collections[collection_name] = new NeDB({filename, autoload: true});
       }
-      return new Collection(this.db.collections[collection_name]);
+      return new Collection(this, this.db.collections[collection_name], validation_schema);
     }
     // MongoDB
-    const collection = this.db.collection(collection_name);
-    collection.__format = this.db.__format;
-    return new Collection(collection);
+    return new Collection(this, this.db.collection(collection_name), validation_schema);
   }
 
   /**
    * Get a list of collections (tables)
-   * @return {object[]} {name: string, type: string, ...}[]
+   * @returns {object[]} {name: string, type: string, ...}[]
    */
   async collections() {
-    if (this.db.__type === 'nedb') {
+    if (this.client.__type === 'nedb') {
       // NeDB
       const dirents = fs.readdirSync(this.db.database_path, {withFileTypes: true});
       return dirents.reduce((result, dirent) => {
@@ -201,26 +201,38 @@ class Database {
  */
 class Collection {
   /**
+   * @param {Database} database
    * @param {mongodb.Collection} handler
    */
-  constructor(handler) {
+  constructor(database, handler, validation_schema = {}) {
+    this.database = database;
     this.handler = handler;
+    this.validator = this.database.client.ajv.compile(this, validation_schema);
+  }
+
+  /**
+   * Get validation errors 
+   * @returns {object[]}
+   */
+  errors() {
+    return this.validator.errors();
   }
 
   /**
    * Get count of data
    * @param {object} filter {_id: string|number, ...}
-   * @return {number}
+   * @returns {number}
    */
   async count(filter = {}) {
-    return this.handler.__type === 'nedb'? await this.handler.count(filter): await this.handler.find(filter).count();
+    return this.database.client.__type === 'nedb'? await this.handler.count(filter): await this.handler.find(filter).count();
   }
 
   /**
    * Search for resources
+   * * Exclude fields designated by this.validator.excludes (string[])
    * @param {object} params {pagination: {page: int, perPage: int}, sort: {field: string, order: 'ASC'|'DESC'}, filter: {*}}
    * @param {object} paginator set if you want to get pagination info; => return {page: number, count: number, skip: number, perPage: number, lastPage: number}
-   * @return {object[]}
+   * @returns {object[]}
    */
   async find(params, paginator = {}) {
     const cursor = this.handler.find(params.filter || {});
@@ -252,77 +264,82 @@ class Collection {
         }
       }
     }
-    return this.handler.__type === 'nedb'? await cursor: await cursor.toArray();
+    const result = this.database.client.__type === 'nedb'? await cursor: await cursor.toArray();
+    // exclude fields designated by validator.excludes
+    return this.validator && Array.isArray(this.validator.excludes) ? result.map(data => omit(data, this.validator.excludes)) : result;
   }
 
   /**
    * Insert data
    * @param {object|object[]} data 
-   * @return {object[]} inserted data
+   * @returns {object[]|boolean} inserted data (false: validation error has been occurred)
    */
   async insert(data) {
-    let docs = data;
-    // if the id format is 'number', increment _id
-    if (this.handler.__format === 'number') {
-      const maxIdData = await this.find({sort: {field: '_id', order: 'DESC'}, pagination: {page: 1, perPage:  1}});
-      const maxId = maxIdData.length > 0? maxIdData[0]._id: 0
-      if (Array.isArray(data)) {
-        let i = 0;
-        docs = docs.reduce((accumulator, e) => {
-          if (e && typeof e === 'object' && Object.keys(e).length > 0) {
-            accumulator.push({...e, _id: maxId + (++i)});
-          }
-          return accumulator;
-        }, []);
-      } else {
-        docs = {...docs, _id: maxId + 1};
+    const docs = [];
+    
+    // _id fixture & validation
+    const maxIdData = await this.find({sort: {field: '_id', order: 'DESC'}, pagination: {page: 1, perPage:  1}});
+    const maxId = maxIdData.length > 0? maxIdData[0]._id: 0;
+    if (Array.isArray(data)) {
+      let i = 0;
+      for (const row of data) {
+        if (typeof row === 'object' && Object.keys(row).length > 0) {
+          const insert_data = await this.validator.insert_check(row);
+          if (insert_data === false) return false; // validation error
+          // _id fixture: if __format is 'number', then increment the _id
+          if (this.database.client.__format === 'number') docs.push({...insert_data, _id: maxId + (++i)});
+          else docs.push(insert_data);
+        }
       }
+    } else if (typeof data === 'object' && Object.keys(data).length > 0) {
+      const insert_data = await this.validator.insert_check(data);
+      if (insert_data === false) return false; // validation error
+      // _id fixture: if __format is 'number', then increment the _id
+      if (this.database.client.__format === 'number') docs.push({...insert_data, _id: maxId + 1});
+      else docs.push(insert_data);
     }
-    // nedb
-    if (this.handler.__type === 'nedb') {
-      return Array.isArray(docs)? await this.handler.insert(docs): await this.handler.insert([docs]);
-    }
-    // mongodb
-    return Array.isArray(docs)? (await this.handler.insertMany(docs)).ops: (await this.handler.insertOne(docs)).ops;
+
+    return this.database.client.__type === 'nedb'?
+      await this.handler.insert(docs)
+      : (await this.handler.insertMany(docs)).ops;
   }
 
   /**
    * Update data
    * @param {object} filter target data filter
-   * @param {object} data update data: {$set: {*}}
-   * @return {number} updated count
+   * @param {object} data for updating
+   * @returns {number|boolean} updated count (false: validation error has been occurred)
    */
   async update(filter, data) {
-    return this.handler.__type === 'nedb'?
-      await this.handler.update(filter, data, {multi: true})
-      : (await this.handler.updateMany(filter, data)).result.nModified;
+    let count = 0;
+    for (const row of await this.find({filter})) {
+      const update_data = await this.validator.update_check(row, data);
+      if (update_data === false) return false; // validation error
+      count += this.database.client.__type === 'nedb'?
+        await this.handler.update({_id: row._id}, {$set: update_data})
+        : (await this.handler.updateOne({_id: row._id}, {$set: update_data})).result.nModified;
+    }
+    return count;
   }
 
   /**
    * Update or Insert data
    * @param {object} filter target data filter
-   * @param {object} data update data: {$set: {*}}
-   * @return {object[]|number} inserted data | updated count
+   * @param {object} data for updating
+   * @returns {object[]|number} inserted data | updated count
    */
   async upsert(filter, data) {
-    if ((await this.find({filter})).length === 0) {
-      // insert: [{$set: {*}} => {*}] + filter
-      let insert = {...filter, ...omit(data, ['$set'])};
-      if (typeof data.$set === 'object') {
-        insert = {...insert, ...data.$set};
-      }
-      return await this.insert(insert);
-    }
+    if ((await this.find({filter})).length === 0) return await this.insert({...filter, ...data});
     return await this.update(filter, data);
   }
 
   /**
    * Delete data 
    * @param {object} filter target data filter
-   * @return {*}
+   * @returns {*}
    */
   async delete(filter) {
-    return this.handler.__type === 'nedb'?
+    return this.database.client.__type === 'nedb'?
       await this.handler.remove(filter, {multi: true})
       : (await this.handler.deleteMany(filter)).result.n;
   }

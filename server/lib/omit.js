@@ -1,9 +1,9 @@
 /**
- * 特定プロパティを除外してオブジェクトをクローン
- * @param {object} obj クローン元オブジェクト
- * @param {string[]} props 除外キーの配列
- * @param {function(value: any, key: string, obj: object) => boolean} fn 除外条件関数
- * @return {object}
+ * Clone the object and exclude properties from the object
+ * @param {object} obj source object
+ * @param {string[]} props excluding propery names
+ * @param {function(value: any, key: string, obj: object) => boolean} fn excluding function
+ * @returns {object}
  * 
  * @example const obj = omit({a:1, b:2, c:3, d:4, e:5}, ['b', 'd'])
  *          console.log(obj) // => {a:1, c:3, e:5}
