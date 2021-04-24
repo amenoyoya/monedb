@@ -5,8 +5,8 @@ const {MongoClient} = require('mongodb');
 const NeDB = require('nedb-promises');
 const fs = require('fs');
 const path = require('path');
-const omit = require('./omit');
-const Validator = require('./monedb/validator');
+const omit = require('../omit');
+const Validator = require('./validator');
 
 /**
  * Check directory exists
@@ -38,7 +38,7 @@ class Client {
     this.__format = id_format;
     this.ajv = new Validator(validation_option);
 
-    if (url.match(/^mongodb:/)) {
+    if (url.match(/^mongodb[:\+]/)) {
       // MongoDB Client
       this.__type = 'mongodb';
       this.client = new MongoClient(url, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -207,7 +207,9 @@ class Collection {
   constructor(database, handler, validation_schema = {}) {
     this.database = database;
     this.handler = handler;
-    this.validator = this.database.client.ajv.compile(this, validation_schema);
+    if (typeof validation_schema.schema === 'object') {
+      this.validator = this.database.client.ajv.compile(this, validation_schema);
+    }
   }
 
   /**
@@ -215,7 +217,7 @@ class Collection {
    * @returns {object[]}
    */
   errors() {
-    return this.validator.errors();
+    return this.validator? this.validator.errors(): [];
   }
 
   /**
@@ -229,7 +231,6 @@ class Collection {
 
   /**
    * Search for resources
-   * * Exclude fields designated by this.validator.excludes (string[])
    * @param {object} params {pagination: {page: int, perPage: int}, sort: {field: string, order: 'ASC'|'DESC'}, filter: {*}}
    * @param {object} paginator set if you want to get pagination info; => return {page: number, count: number, skip: number, perPage: number, lastPage: number}
    * @returns {object[]}
@@ -264,9 +265,7 @@ class Collection {
         }
       }
     }
-    const result = this.database.client.__type === 'nedb'? await cursor: await cursor.toArray();
-    // exclude fields designated by validator.excludes
-    return this.validator && Array.isArray(this.validator.excludes) ? result.map(data => omit(data, this.validator.excludes)) : result;
+    return this.database.client.__type === 'nedb'? await cursor: await cursor.toArray();
   }
 
   /**
@@ -284,7 +283,7 @@ class Collection {
       let i = 0;
       for (const row of data) {
         if (typeof row === 'object' && Object.keys(row).length > 0) {
-          const insert_data = await this.validator.insert_check(row);
+          const insert_data = this.validator? await this.validator.insert_check(row): row;
           if (insert_data === false) return false; // validation error
           // _id fixture: if __format is 'number', then increment the _id
           if (this.database.client.__format === 'number') docs.push({...insert_data, _id: maxId + (++i)});
@@ -292,7 +291,7 @@ class Collection {
         }
       }
     } else if (typeof data === 'object' && Object.keys(data).length > 0) {
-      const insert_data = await this.validator.insert_check(data);
+      const insert_data = this.validator? await this.validator.insert_check(data): data;
       if (insert_data === false) return false; // validation error
       // _id fixture: if __format is 'number', then increment the _id
       if (this.database.client.__format === 'number') docs.push({...insert_data, _id: maxId + 1});
@@ -313,7 +312,7 @@ class Collection {
   async update(filter, data) {
     let count = 0;
     for (const row of await this.find({filter})) {
-      const update_data = await this.validator.update_check(row, data);
+      const update_data = this.validator? await this.validator.update_check(row, data): data;
       if (update_data === false) return false; // validation error
       count += this.database.client.__type === 'nedb'?
         await this.handler.update({_id: row._id}, {$set: update_data})

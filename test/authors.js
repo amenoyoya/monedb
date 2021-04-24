@@ -1,11 +1,13 @@
 /**
- * Test: authors data
+ * Test: No schema data
  */
+const fs = require('fs');
 const dayjs = require('dayjs');
-const bcrypt = require('bcrypt');
-const MoneDB = require('../server/lib/monedb');
+const MoneDB = require('../server/lib/monedb/client');
 
 (async() => {
+  fs.rmdirSync(`${__dirname}/test.db`, {recursive: true});
+
   // connect to MoneDB
   const client = new MoneDB(__dirname, 'string');
   await client.connect();
@@ -50,10 +52,13 @@ const MoneDB = require('../server/lib/monedb');
     console.log(result);
   }
 
+  // update author
   result = await collection.update({name: 'John'}, {email: 'john@test.localhost'});
   if (result === false) {
     console.error(collection.errors());
   } else {
     console.log(result);
   }
+
+  client.close();
 })();

@@ -1,5 +1,5 @@
 const rison = require('rison');
-const MoneDB = require('../lib/monedb');
+const MoneDB = require('../lib/monedb/client');
 const omit = require('../lib/omit');
 
 module.exports = async (fastify, opts) => {
