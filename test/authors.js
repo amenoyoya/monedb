@@ -6,8 +6,6 @@ const dayjs = require('dayjs');
 const MoneDB = require('../server/lib/monedb/client');
 
 (async() => {
-  fs.rmdirSync(`${__dirname}/test.db`, {recursive: true});
-
   // connect to MoneDB
   const client = new MoneDB(__dirname, 'string');
   await client.connect();
@@ -40,8 +38,13 @@ const MoneDB = require('../server/lib/monedb/client');
     },
   };
 
-  // insert author
+  
   const collection = await client.db('test').collection('authors', Author);
+
+  // delete authors
+  console.log('delete', await collection.delete({}));
+
+  // insert author
   let result = await collection.insert([
     {name: 'John', email: 'john@example.dev', password: 'pa$$wd', created_at: dayjs().subtract(1, 'year').format('YYYY-MM-DD HH:mm:ss')},
     {name: 'Sara', email: 'sara@example.dev', password: '1234'},

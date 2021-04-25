@@ -40,7 +40,7 @@ module.exports = async (fastify, opts) => {
       query = rison.decode(query || '()');
       
       // validation data
-      const validator = (await datasource.collection(validator_collection).find({target: request.params.collection}))[0];
+      const validator = (await datasource.collection(validator_collection).find({filter: {target: request.params.collection}}))[0];
       // find a list of data
       const paginator = {};
       let data = await datasource.collection(request.params.collection, validator).find(query, paginator);
@@ -65,7 +65,7 @@ module.exports = async (fastify, opts) => {
         return reply.code(400).send({error: 'payload.data must be a single, or list of object(s)'});
       }
       // validation data
-      const validator = (await datasource.collection(validator_collection).find({target: request.params.collection}))[0];
+      const validator = (await datasource.collection(validator_collection).find({filter: {target: request.params.collection}}))[0];
       // insert data
       const collection = datasource.collection(request.params.collection, validator);
       const result = await collection.insert(request.body.data);
@@ -94,11 +94,16 @@ module.exports = async (fastify, opts) => {
         return reply.code(400).send({error: 'payload.data must be a object'});
       }
       // validation data
-      const validator = (await datasource.collection(validator_collection).find({target: request.params.collection}))[0];
+      const validator = (await datasource.collection(validator_collection).find({filter: {target: request.params.collection}}))[0];
       // update data
       const collection = datasource.collection(request.params.collection, validator);
       const prevData = await collection.find({filter: request.body.filter});
-      const updated = await collection.update(request.body.filter, {$set: request.body.data});
+      if (prevData.length === 0) {
+        const insert_data = omit({...request.body.filter, ...request.body.data}, ['_id']);
+        await collection.insert(insert_data);
+        return reply.code(201).send(insert_data); // 201 CREATED
+      }
+      const updated = await collection.update(request.body.filter, request.body.data);
       if (updated === false) {
         // validation error
         return reply.code(400).send(collection.errors());
@@ -145,7 +150,7 @@ module.exports = async (fastify, opts) => {
   fastify.get('/:collection/:id', async (request, reply) => {
     try {
       // validation data
-      const validator = (await datasource.collection(validator_collection).find({target: request.params.collection}))[0];
+      const validator = (await datasource.collection(validator_collection).find({filter: {target: request.params.collection}}))[0];
       // find a single data
       const data = await datasource.collection(request.params.collection, validator).find({
         pagination: {page: 1, perPage: 1}, filter: {_id: objectId(request.params.id)}
@@ -173,7 +178,7 @@ module.exports = async (fastify, opts) => {
         return reply.code(400).send({error: 'payload.data must be a object'});
       }
       // validation data
-      const validator = (await datasource.collection(validator_collection).find({target: request.params.collection}))[0];
+      const validator = (await datasource.collection(validator_collection).find({filter: {target: request.params.collection}}))[0];
       // find data
       const collection = datasource.collection(request.params.collection, validator);
       const filter = {_id: objectId(request.params.id)};
@@ -183,7 +188,7 @@ module.exports = async (fastify, opts) => {
         return reply.code(201).send(request.body.data); // 201 CREATED
       }
       // update data
-      const updated = await collection.update(filter, {$set: request.body.data});
+      const updated = await collection.update(filter, request.body.data);
       if (updated === false) {
         // validation error
         return reply.code(400).send(collection.errors());
