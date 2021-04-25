@@ -35,4 +35,4 @@ WORKDIR /work/
 USER worker
 
 # スタートアップコマンド（docker up の度に実行される）
-# CMD ["/bin/bash", "-c", "yarn && yarn start"]
+CMD ["/bin/bash", "-c", "yarn && yarn start"]

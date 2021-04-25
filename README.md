@@ -43,8 +43,10 @@ Set by [.env](./.env)
 
 - `DEBUG`: boolean
     - Set `true` for debug mode
-- `NODE_PORT`: number
+- `BACKEND_PORT`: number
     - MoneDB Rest API endpoint port
+- `FRONTEND_PORT`: number
+    - Frontend HTTP server port
 - `MONGO_EXPRESS_PORT`: number
     - MongoDB WebUI http port
 - `MONEDB_URL` string
