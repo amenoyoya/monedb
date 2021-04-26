@@ -1,5 +1,6 @@
 const App = () => {
-  const [state, setState] = React.useState({message: ''});
+  const [state, setState] = React.useState({page: <div></div>, message: ''});
+  const query = parseQueryString(window.location.search);
 
   async function setupDatabase() {
     console.log(
@@ -38,13 +39,13 @@ const App = () => {
       message: 'データベースの準備が完了しました',
     });
   }
-  
-  return (
-    <div className="sidebar-mini layout-fixed layout-navbar-fixed">
-      <div className="wrapper">
-        <Header />
-        <Sidebar />
-        <div className="content-wrapper px-4 py-2" style={{minHeight: '823px'}}>
+
+  React.useEffect(() => {
+    const routes = {
+      list: <List target={query.target} />,
+      edit: <Edit target={query.target} item={query.item} />,
+      default:
+        <div>
           <button className="btn btn-primary" onClick={setupDatabase}>データベースセットアップ</button>
           <div style={{transition: '1s', opacity: state.message? 1: 0, width: state.message? '100%': 0}}>
             <div className="alert alert-success" role="alert">
@@ -52,6 +53,21 @@ const App = () => {
               <div><a href="/">ページリロード</a></div>
             </div>
           </div>
+        </div>,
+    };
+    setState({
+      ...state,
+      page: routes[query.page] || routes.default,
+    });
+  }, []);
+  
+  return (
+    <div className="sidebar-mini layout-fixed layout-navbar-fixed">
+      <div className="wrapper">
+        <Header />
+        <Sidebar active={query.target} />
+        <div className="content-wrapper px-4 py-2" style={{minHeight: '823px'}}>
+          {state.page}
         </div>
       </div>
     </div>

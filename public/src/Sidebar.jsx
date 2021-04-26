@@ -1,5 +1,5 @@
 const Sidebar = props => {
-  const [menuItems, setMenuItems] = React.useState([]);
+  const [state, setState] = React.useState({menuItems: []});
 
   /**
    * Get menu items from MoneDB.@validators[].target
@@ -7,7 +7,10 @@ const Sidebar = props => {
   React.useEffect(() => {
     (async () => {
       const data = (await axios.get('/api/monedb/@validators')).data;
-      setMenuItems(data.map(e => e.target));
+      setState({
+        ...state,
+        menuItems: data.map(e => e.target),
+      });
     })();
   }, []);
 
@@ -20,9 +23,9 @@ const Sidebar = props => {
       <nav className="sidebar">
         <ul className="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
           {
-            menuItems.map((item, index) => (
+            state.menuItems.map((item, index) => (
               <li className="nav-item" key={`menuitem-${index}`}>
-                <a href="#" className="nav-link active">{item}</a>
+                <a href={`/?page=list&target=${item}`} className={`nav-link ${item === props.active? 'active': ''}`}>{item}</a>
               </li>
             ))
           }
