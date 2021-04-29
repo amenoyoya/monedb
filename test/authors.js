@@ -4,63 +4,68 @@
 const fs = require('fs');
 const dayjs = require('dayjs');
 const MoneDB = require('../server/lib/monedb/client');
+const Validator = require('../server/lib/monedb/validator');
 
 (async() => {
   // connect to MoneDB
-  const client = new MoneDB(__dirname, 'string');
+  const client = new MoneDB(__dirname);
   await client.connect();
 
   /**
-   * Author model (validation)
+   * Author model (validation schema)
    */
   const Author = {
-    schema: {
-      properties: {
-        name: {type: 'string', maxLength: 16, minLength: 4},
-        email: {type: 'string', format: 'email'},
-        password: {type: 'string', maxLength: 16, minLength: 4},
-        created_at: {type: 'string', format: 'date-time'},
-        updated_at: {type: 'string', format: 'date-time'},
-      },
-      required: ['name', 'email', 'password'],
+    properties: {
+      name: {type: 'string', minLength: 3, maxLength: 20},
+      email: {type: 'string', format: 'email'},
+      password: {type: 'string', pattern: '^(?=.*?[a-zA-Z])(?=.*?\\d)[a-zA-Z\\d\ -/:-@\\[-~]+$', minLength: 4, maxLength: 16},
+      created_at: {type: 'string', format: 'date-time'},
+      updated_at: {type: 'string', format: 'date-time'},
     },
-    onupsert: {
-      name: 'unique:name',
-      email: 'unique:email',
-      password: 'password',
-    },
-    oninsert: {
-      created_at: 'timestamp',
-      updated_at: 'timestamp',
-    },
-    onupdate: {
-      updated_at: 'timestamp',
+    required: ['name', 'email', 'password'],
+    updating: {
+      _id: {type: 'increment'},
+      name: {type: 'unique'},
+      email: {type: 'unique'},
+      password: {type: 'hash', salt: 16}, // !cation: bcrypt.hashSync is too slow
+      created_at: {type: 'timestamp_inserted', format: 'YYYY/MM/DD HH:mm:ss'},
+      updated_at: {type: 'timestamp_updated', format: 'YYYY/MM/DD HH:mm:ss'},
     },
   };
 
-  
-  const collection = await client.db('test').collection('authors', Author);
-
-  // delete authors
-  console.log('delete', await collection.delete({}));
+  // Validator
+  const validator = new Validator();
+  const collection = validator.compile(client.db('test').collection('authors'), Author);
+  await collection.delete({}); // clear data
 
   // insert author
-  let result = await collection.insert([
-    {name: 'John', email: 'john@example.dev', password: 'pa$$wd', created_at: dayjs().subtract(1, 'year').format('YYYY-MM-DD HH:mm:ss')},
-    {name: 'Sara', email: 'sara@example.dev', password: '1234'},
-  ]);
-  if (result === false) {
-    console.error(collection.errors());
-  } else {
-    console.log(result);
+  try {
+    console.log(
+      await collection.insert([
+        {name: 'John', email: 'john@example.dev', password: 'pa33wd'},
+        {name: 'Sara', email: 'sara@example.dev', password: '@123A'},
+        {name: 'Alice'}, // this author will not be inserted
+      ])
+    );
+  } catch (err) {
+    console.error(err);
   }
 
   // update author
-  result = await collection.update({name: 'John'}, {email: 'john@test.localhost'});
-  if (result === false) {
-    console.error(collection.errors());
-  } else {
-    console.log(result);
+  try {
+    console.log(
+      await collection.update({name: 'John'}, {name: 'John', email: 'john@test.localhost'})
+    );
+  } catch (err) {
+    console.error(err);
+  }
+
+  try {
+    console.log(
+      await collection.update({name: 'Sara'}, {email: 'john@test.localhost'}) // email unique validation error will be occurred
+    );
+  } catch (err) {
+    console.error(err);
   }
 
   client.close();

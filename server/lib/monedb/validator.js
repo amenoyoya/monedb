@@ -2,154 +2,246 @@
  * Validation plugin for MoneDB
  */
 const Ajv = require('ajv');
+const ajvFormats = require('ajv-formats');
 const bcrypt = require('bcrypt');
 const dayjs = require('dayjs');
 
 /**
  * MoneDB Validator
  */
-class MoneValidator {
+class Validator {
   /**
-   * @param {object} option 
+   * Custom types for `updating` schema
+   * [each function]
+   * @param {object} data current processing data (current processing value => data[column])
+   * @param {string} column current processing column (current processing value => data[column])
+   * @param {object} arguments optional arguments {
+   *   prevData {object}: previous saved data (empty object on MoneDB.Collection.insert event)
+   *   collection {MoneDB.Collection}
+   *   ...etc: designated arguments in `$schema.updating.$column` object
+   * }
    */
-  constructor(option = {}) {
-    this.ajv = new Ajv({
-      allErrors: true,
-      useDefaults: true,
-      ...option,
-    });
-    require('ajv-formats')(this.ajv);
-
-    // default actions
-    this.actions = {
-      password: (key, prevData, data, [collection]) => data[key]? bcrypt.hashSync(data[key], 10): undefined,
-
-      timestamp: (key, prevData, data, [collection]) => data[key] || dayjs().format('YYYY-MM-DD HH:mm:ss'),
-
-      // action: `unique:column` validation
-      unique: async (key, prevData, data, [collection, column]) => {
-        const rows = await collection.find({filter: {[column]: data[key]}});
-        if (rows.length > 0 && rows[0]._id !== prevData._id) {
-          // validation error
-          throw new Error(`must be a unique value "${key}"`);
-        }
+  static TYPES = {
+    /**
+     * format to auto-increment the value
+     * {type: 'increment'}
+     */
+    increment: async (data, column, {collection, prevData}) => {
+      // increment the value only on inserted
+      if (data[column] === undefined && Object.keys(prevData).length === 0) {
+        const rows = await collection.find({sort: {field: column, order: 'DESC'}, pagination: {page: 1, perPage:  1}});
+        const max = rows.length > 0? (parseInt(rows[0][column], 10) || 0): 0;
+        data[column] = max + 1;
       }
-    };
+    },
+
+    /**
+     * validate the value is unique
+     * {type: 'unique'}
+     */
+    unique: async (data, column, {collection, prevData}) => {
+      const rows = await collection.find({filter: {[column]: data[column]}});
+      if (rows.length > 0 && rows[0]._id !== prevData._id) {
+        // validation error
+        throw new Error(`must be a unique value "${column}"`);
+      }
+    },
+
+    /**
+     * password hashing formatter
+     * {type: 'hash', salt: {int}}
+     */
+    hash: (data, column, {salt}) => {
+      if (data[column]) data[column] = bcrypt.hashSync(data[column], salt || 10);
+    },
+
+    /**
+     * set current datetime to the value formatter on only inserted
+     * {type: 'timestamp_inserted', format: {string}}
+     */
+    timestamp_inserted: (data, column, {prevData, format}) => {
+      // only set current date-time: on inserted (prevData is empty) and target value is empty
+      if (!data[column] && Object.keys(prevData).length === 0) data[column] = dayjs().format(format || 'YYYY-MM-DD HH:mm:ss');
+    },
+
+    /**
+     * set current datetime to the value formatter
+     * {type: 'timestamp_updated', format: {string}}
+     */
+    timestamp_updated: (data, column, {format}) => {
+      if (!data[column]) data[column] = dayjs().format(format || 'YYYY-MM-DD HH:mm:ss');
+    },
+  };
+
+  /**
+   * Add types plugin
+   * @param {object} types
+   */
+  static AddTypes(types) {
+    Validator.TYPES = {...Validator.TYPES, ...types};
   }
 
   /**
-   * Set actions plugin
-   * @param {object} actions 
+   * @param {object} option
    */
-  setActions(actions) {
-    this.actions = {...this.actions, actions};
-  }
+  constructor(option) {
+    this.ajv = new Ajv({allErrors: true, useDefaults: true, ...option});
+    ajvFormats(this.ajv);
 
-  /**
-   * @param {MoneDB.Collection} collection 
-   * @param {object} validator {schema: object, onupsert: object, oninsert: object, onupdate: object}
-   * @returns {object} validator
-   */
-  compile(collection, validator = {}) {
-    const validates = {
-      oninsert: this.ajv.compile({
-        type: 'object',
-        additionalProperties: false,
-        properties: {},
-        ...(validator.schema || {}),
-      }),
-      onupdate: this.ajv.compile({
-        type: 'object',
-        additionalProperties: false,
-        properties: {},
-        ...(validator.schema || {}),
-        required: [], // no required input when updating
-      }),
-    }
-
-    validator.oninsert = {
-      ...(validator.onupsert || {}),
-      ...(validator.oninsert || {}),
-    };
-    validator.onupdate = {
-      ...(validator.onupsert || {}),
-      ...(validator.onupdate || {}),
+    // process the type function
+    const processType = async (type, data, column, schema, parentSchema, errors) => {
+      try {
+        const fn = Validator.TYPES[type];
+        await fn(data, column, {...schema[column], collection: parentSchema.collection, prevData: parentSchema.prevData});
+      } catch (err) {
+        errors.push({instancePath: `/${column}`, keyword: type, params: schema[column], message: err.message});
+      }
     };
 
     /**
-     * Process oninsert/onupdate event
-     * @param {object} event 'oninsert'|'onupdate'
-     * @param {object} prevData
-     * @param {object} data
+     * Ajv keyword: `updating` {
+     *   [$column]: {type: '$type_name', ...arguments}
+     * }
      */
-    const __process = async (event, prevData, data) => {
-      // clear errors
-      validates.oninsert.errors = [];
-      validates.onupdate.errors = [];
+    this.ajv.addKeyword({
+      keyword: 'updating',
+      type: 'object',
+      schemaType: 'object',
+      implements: ['collection', 'prevData'], // use keywords: collection, prevData
+      async: true,
+      compile: (schema, parentSchema) => (
+        async data => {
+          const errors = [];
 
-      for (const key of Object.keys(validator[event])) {
-        if (validator.schema.properties[key] === undefined) continue;
-        
-        // action name format: `${action_name}:${argv1},${argv2},...`
-        const args = validator[event][key].split(':');
-        const action = this.actions[args[0]];
-        if (typeof action !== 'function') continue;
-
-        try {
-          // set default data value
-          const value = await action(key, prevData, data, [collection, ...(args.length > 1? args[1].split(','): [])]);
-          if (value !== undefined) data[key] = value;
-        } catch (err) {
-          // validation error
-          validates[event].errors.push({
-            instancePath: `/${key}`,
-            schemaPath: `@/${event}/${key}`,
-            keyword: event,
-            message: err.message,
-          });
+          for (const column of Object.keys(schema)) {
+            const type = schema[column].type;
+            
+            if (typeof type === 'string') {
+              await processType(type, data, column, schema, parentSchema, errors);
+            } else if (Array.isArray(type)) {
+              for (const t of type) await processType(t, data, column, schema, parentSchema, errors);
+            }
+          }
+          
+          if (errors.length > 0) throw new Ajv.ValidationError(errors);
+          return true;
         }
-      }
-    }
+      ),
+    });
+  }
 
-    return {
-      /**
-       * Get errors
-       * @returns {object[]}
-       */
-      errors() {
-        return [...(validates.oninsert.errors || []), ...(validates.onupdate.errors || [])];
-      },
-
-      /**
-       * Check validation for inserting data
-       * @param {object} data
-       * @returns {object|boolean} data for inserting | false: validation error
-       */
-      async insert_check(data) {
-        const insert_data = {...data};
-        // validate by ajv
-        if (!validates.oninsert(insert_data)) return false;
-        // process oninsert event
-        await __process('oninsert', {}, insert_data);
-        return validates.oninsert.errors.length === 0? insert_data: false;
-      },
-
-      /**
-       * Check validation for updating data
-       * @param {object} prevData
-       * @param {object} data
-       * @returns {object|boolean} data for inserting | false: validation error
-       */
-      async update_check(prevData, data) {
-        const update_data = {...data};
-        // validate by ajv
-        if (!validates.onupdate(update_data)) return false;
-        // process onupdate event
-        await __process('onupdate', prevData, update_data);
-        return validates.onupdate.errors.length === 0? update_data: false;
-      },
-    };
+  /**
+   * Generate validatable collection
+   * @param {MoneDB.Collection} collection
+   * @param {object} schema
+   * @returns {ValidatableCollection}
+   */
+  compile(collection, schema) {
+    return new ValidatableCollection(collection, this.ajv, schema);
   }
 }
 
-module.exports = MoneValidator;
+/**
+ * Validatable MoneDB.Collection
+ */
+class ValidatableCollection {
+  constructor(collection, ajv, schema) {
+    this.schema = {
+      additionalProperties: false,
+      ...schema,
+      $async: true,
+      type: 'object',
+      collection, // Collection handler for `updated` schema
+      prevData: {}, // Previous saved data: only set on MoneDB.Collection.update event
+    };
+    this.insertValidate = ajv.compile(this.schema);
+    this.updateValidate = ajv.compile(this.updateSchema = {
+      ...this.schema,
+      required: [], // no required columns on updated
+    });
+  }
+
+  /**
+   * Get count of data
+   * @param {object} filter {_id: string|number, ...}
+   * @returns {number}
+   */
+   async count(filter = {}) {
+    return await this.schema.collection.count(filter);
+  }
+
+  /**
+   * Search for resources
+   * @param {object} params {pagination: {page: int, perPage: int}, sort: {field: string, order: 'ASC'|'DESC'}, filter: {*}}
+   * @param {object} paginator set if you want to get pagination info; => return {page: number, count: number, skip: number, perPage: number, lastPage: number}
+   * @returns {object[]}
+   */
+  async find(params, paginator = {}) {
+    return await this.schema.collection.find(params, paginator);
+  }
+
+  /**
+   * Insert data
+   * @param {object|object[]} data 
+   * @returns {object[]|object} inserted_data
+   * @throws {object[]} validation errors
+   */
+  async insert(data) {
+    if (Array.isArray(data)) {
+      const inserted = [];
+      for (const row of data) {
+        inserted.push(
+          await this.schema.collection.insert(
+            await this.insertValidate({...row}) // validate the copied data
+          )
+        );
+      }
+      return inserted;
+    }
+    return await this.insertSchema.collection.insert(
+      await this.insertValidate({...data}) // validate the copied data
+    );
+  }
+
+  /**
+   * Update data
+   * @param {object} filter target data filter
+   * @param {object} data for updating
+   * @returns {number} updated count
+   * @throws {object[]} validation errors
+   */
+  async update(filter, data) {
+    let updated = 0;
+    for (const prevData of await this.schema.collection.find({filter})) {
+      this.updateSchema.prevData = prevData; // set the previous saved data
+      updated += await this.schema.collection.update(
+        {_id: prevData._id},
+        await this.updateValidate({...data}) // validate the copied data
+      );
+    }
+    return updated;
+  }
+
+  /**
+   * Update or Insert data
+   * @param {object} filter target data filter
+   * @param {object} data for updating
+   * @returns {object|number} inserted data | updated count
+   * @throws {object[]} validation errors
+   */
+  async upsert(filter, data) {
+    if ((await this.find({filter})).length === 0) return await this.insert({...filter, ...data});
+    return await this.update(filter, data);
+  }
+
+  /**
+   * Delete data 
+   * @param {object} filter target data filter
+   * @returns {*}
+   */
+  async delete(filter) {
+    return await this.schema.collection.delete(filter);
+  }
+}
+
+module.exports = Validator;
