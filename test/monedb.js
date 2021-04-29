@@ -55,50 +55,34 @@ const dayjs = require('dayjs');
   // authors
   const authors = await db.model('authors', '@schemes');
   await authors.delete(); // clear all authors
-  try {
-    console.log(
-      await authors.insert([
-        {name: 'Wiki Pedia', sex: 'unknown'},
-        {name: 'Dandy Dandan', sex: 'male'},
-        {name: 'Wife Wiseman', sex: 'female'},
-        {name: 'Phantom Lord', sex: null}, // this will not be inserted
-      ])
-    );
-  } catch (err) {
-    console.error(err);
-  }
+  console.log(
+    await authors.insert([
+      {name: 'Wiki Pedia', sex: 'unknown'},
+      {name: 'Dandy Dandan', sex: 'male'},
+      {name: 'Wife Wiseman', sex: 'female'},
+      {name: 'Phantom Lord', sex: null}, // this will not be inserted
+    ])
+  );
 
-  try {
-    console.log(
-      await authors.upsert({name: 'Phantom Lord'}, {sex: 'unknown'})
-    );
-  } catch (err) {
-    console.error(err);
-  }
+  console.log(
+    await authors.upsert({name: 'Phantom Lord'}, {sex: 'unknown'})
+  );
 
   // books
   const books = await db.model('books', '@schemes');
   await books.delete(); // clear all books
-  try {
-    console.log(
-      await books.insert([
-        {title: 'The Big Dictionaty of the World', published_at: '1900-09-08', authors: [1, 2]},
-        {title: 'This book does not exists', published_at: '2121-12-24', authors: [3]},
-        {title: 'I am a Phantom, You are a Human', published_at: '2011-01-01', authors: 4}, // this will not be inserted
-      ])
-    );
-  } catch (err) {
-    console.error(err);
-  }
-
-  try {
-    console.log(
-      await books.upsert(
-        {title: 'Difference between the Phantom and Ghost'},
-        {title: 'Difference between the Phantom and Ghost', published_at: '2017-04-30', authors: [4, 5]} // this will not be inserted
-      )
-    );
-  } catch (err) {
-    console.error(err);
-  }
+  console.log(
+    await books.insert([
+      {title: 'The Big Dictionaty of the World', published_at: '1900-09-08', authors: [1, 2]},
+      {title: 'This book does not exists', published_at: '2121-12-24', authors: [3]},
+      {title: 'I am a Phantom, You are a Human', published_at: '2011-01-01', authors: 4}, // this will not be inserted
+    ])
+  );
+  
+  console.log(
+    await books.upsert(
+      {title: 'Difference between the Phantom and Ghost'},
+      {title: 'Difference between the Phantom and Ghost', published_at: '2017-04-30', authors: [4, 5]} // this will not be inserted
+    )
+  );
 })();

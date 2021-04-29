@@ -5,6 +5,7 @@ const Ajv = require('ajv');
 const ajvFormats = require('ajv-formats');
 const bcrypt = require('bcrypt');
 const dayjs = require('dayjs');
+const omit = require('../omit');
 
 /**
  * MoneDB Validator
@@ -28,6 +29,7 @@ class Validator {
      * {type: 'array', items: {type: string|string[], ...}}
      */
     array: async (data, column, {$validator, $collection, $prevData, items}) => {
+      if (!Array.isArray(data[column])) return;
       for (let i = 0; i < data[column].length; ++i) {
         try {
           await $validator.__validate(items.type, data[column], i, {...items, $validator, $collection, $prevData});
@@ -156,7 +158,12 @@ class Validator {
         const fn = Validator.TYPES[type];
         await fn(data, column, args);
       } catch (err) {
-        errors.push({instancePath: `/${column}`, keyword: type, params: args, message: err.message});
+        errors.push({
+          instancePath: `/${column}`,
+          keyword: type,
+          params: omit(args, ['$validator', '$collection', '$prevData']),
+          message: err.message
+        });
       }
     };
 
@@ -226,46 +233,71 @@ class ValidatableCollection {
   /**
    * Insert data
    * @param {object|object[]} data 
-   * @returns {object[]|object} inserted_data
-   * @throws {object[]} validation errors
+   * @returns {object[]|object} inserted data {...data, $errors: object[] (if validation error has been occurred)}
    */
   async insert(data) {
     if (Array.isArray(data)) {
       const inserted = [];
       for (const row of data) {
-        inserted.push(
-          await this.schema.collection.insert(await this.validate(row))
-        );
+        try {
+          inserted.push(
+            await this.schema.collection.insert(await this.validate(row))
+          );
+        } catch (err) {
+          inserted.push({...row, $errors: err.errors});
+        }
       }
       return inserted;
     }
-    return await this.schema.collection.insert(await this.validate(data));
+    try {
+      return await this.schema.collection.insert(await this.validate(data));
+    } catch (err) {
+      return {...data, $errors: err.errors};
+    }
   }
 
   /**
    * Update data
    * @param {object} filter target data filter
    * @param {object} data for updating
-   * @returns {number} updated count
-   * @throws {object[]} validation errors
+   * @returns {object[]} previous saved data list [{...prevData, $errors: object[] (if validation error has been occurred)}]
    */
   async update(filter, data) {
-    let updated = 0;
+    const updating = [];
     for (const prevData of await this.schema.collection.find({filter})) {
-      updated += await this.schema.collection.update(
-        {_id: prevData._id},
-        await this.validate(data, prevData)
-      );
+      try {
+        const updated = await this.schema.collection.update(
+          {_id: prevData._id},
+          await this.validate(data, prevData)
+        );
+        if (updated === 0) {
+          updating.push({
+            ...prevData,
+            $errors: [
+              {
+                instancePath: '/',
+                schemaPath: '#/',
+                keyword: 'unknown_error',
+                params: {},
+                message: 'unknown error has been occurred',
+              }
+            ]
+          });
+        } else {
+          updating.push(prevData);
+        }
+      } catch (err) {
+        updating.push({...prevData, $errors: err.errors});
+      }
     }
-    return updated;
+    return updating;
   }
 
   /**
    * Update or Insert data
    * @param {object} filter target data filter
    * @param {object} data for updating
-   * @returns {object|number} inserted data | updated count
-   * @throws {object[]} validation errors
+   * @returns {object|object[]} inserted data | previous saved data list
    */
   async upsert(filter, data) {
     if ((await this.find({filter})).length === 0) return await this.insert({...filter, ...data});

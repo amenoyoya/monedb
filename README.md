@@ -55,6 +55,3 @@ Set by [.env](./.env)
         - NeDB data file will be saved to: `/path/to/${MONEDB_URL}/${MONEDB_DATABASE}.db/${collection_name}.table`
 - `MONEDB_DATABASE`: string
     - MoneDB server database name
-- `MONEDB_ID_FORMAT`: string (`string`|`number`)
-    - `string`: MoneDB.data._id is random string: default format for MongoDB, NeDB
-    - `number`: MoneDB.data._id is integer like RDBMS (1, 2, 3, ... auto increment)
