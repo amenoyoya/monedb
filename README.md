@@ -28,7 +28,9 @@ $ ./x up -d
     - **node**: `node:14-slim`
         - Node.js service container
         - routes:
-            - HTTP: http://localhost:{$NODE_PORT:-8080} => http://node:{$NODE_PORT:-8080}
+            - HTTP:
+                - http://localhost:{$BACKEND_PORT:-8080} => http://node:{$BACKEND_PORT:-8080}
+                - http://localhost:{$FRONTEND_PORT:-8000} => http://node:{$FRONTEND_PORT:-8000}
     - **mongodb**: `mongo:4.4`
         - MongoDB service container
         - routes:
@@ -51,7 +53,15 @@ Set by [.env](./.env)
     - MongoDB WebUI http port
 - `MONEDB_URL` string
     - MongoDB mode: `mongodb://${user}:${password}@${mongodb_host}:${mongodb_port}`
-    - NeDB mode: save directory path
+    - NeDB mode: directory path to save
         - NeDB data file will be saved to: `/path/to/${MONEDB_URL}/${MONEDB_DATABASE}.db/${collection_name}.table`
 - `MONEDB_DATABASE`: string
     - MoneDB server database name
+
+***
+
+## REST API
+
+### Swagger OpenAPI Documentation
+
+See: http://localhost:8080/api/documentation

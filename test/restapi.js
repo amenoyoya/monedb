@@ -61,7 +61,7 @@ require('dotenv').config({path: `${__dirname}/../.env`});
   ).data);
 
   // authors
-  await axios.delete(`${endpoint}/api/monedb/authors`); // clear all authors
+  await axios.delete(`${endpoint}/api/monedb/authors`, {data: {filter: {}}}); // clear all authors
   console.log((
     await axios.post(`${endpoint}/api/monedb/authors`, {data: [
       {name: 'Wiki Pedia', sex: 'unknown'},
@@ -72,7 +72,7 @@ require('dotenv').config({path: `${__dirname}/../.env`});
   ).data);
 
   // books
-  await axios.delete(`${endpoint}/api/monedb/books`); // clear all books
+  await axios.delete(`${endpoint}/api/monedb/books`, {data: {filter: {}}}); // clear all books
   console.log((
     await axios.post(`${endpoint}/api/monedb/books`, {data: [
       {title: 'The Big Dictionaty of the World', published_at: '1900-09-08', authors: [1, 2]},
@@ -85,8 +85,8 @@ require('dotenv').config({path: `${__dirname}/../.env`});
    * Get authors data where the book[_id=1]'s authors
    */
   try {
-    const book = (await axios.get(`${endpoint}/api/monedb/books?(filter:(_id:1))`)).data[0];
-    const uri = `${endpoint}/api/monedb/authors?${rison.encode({
+    const book = (await axios.get(`${endpoint}/api/monedb/books?query=(filter:(_id:1))`)).data[0];
+    const uri = `${endpoint}/api/monedb/authors?query=${rison.encode({
       filter: {
         _id: {$in: book.authors}
       }
