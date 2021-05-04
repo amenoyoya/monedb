@@ -4,9 +4,9 @@ const App = () => {
 
   async function setupDatabase() {
     console.log(
-      await axios.put('/api/monedb/@validators', {
+      await axios.put('/api/monedb/@schemes', {
         filter: {
-          target: 'authors',
+          name: 'authors',
         },
         data: {
           schema: {
@@ -18,18 +18,13 @@ const App = () => {
               updated_at: {type: 'string', format: 'date-time'},
             },
             required: ['name', 'email', 'password'],
-          },
-          onupsert: {
-            name: 'unique:name',
-            email: 'unique:email',
-            password: 'password',
-          },
-          oninsert: {
-            created_at: 'timestamp',
-            updated_at: 'timestamp',
-          },
-          onupdate: {
-            updated_at: 'timestamp',
+            updating: {
+              name: 'unique',
+              email: 'unique',
+              password: 'hash',
+              created_at: 'timestamp_inserted',
+              updated_at: 'timestamp_updated',
+            },
           },
         }
       })

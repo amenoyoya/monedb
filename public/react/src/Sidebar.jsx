@@ -2,14 +2,14 @@ const Sidebar = props => {
   const [state, setState] = React.useState({menuItems: []});
 
   /**
-   * Get menu items from MoneDB.@validators[].target
+   * Get menu items from MoneDB.@schemes[].target
    */
   React.useEffect(() => {
     (async () => {
-      const data = (await axios.get('/api/monedb/@validators')).data;
+      const data = (await axios.get('/api/monedb/@schemes')).data;
       setState({
         ...state,
-        menuItems: data.map(e => e.target),
+        menuItems: data.map(e => e.name),
       });
     })();
   }, []);

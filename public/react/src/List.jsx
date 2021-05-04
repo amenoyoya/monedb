@@ -2,7 +2,7 @@ const List = props => {
   React.useEffect(() => {
     (async () => {
       const items = (await axios.get(`/api/monedb/${props.target}`)).data;
-      const schema = (await axios.get(`/api/monedb/@validators?(target:${props.target})`)).data[0];
+      const schema = (await axios.get(`/api/monedb/@schemes?query=(filter:(name:${props.target}))`)).data[0];
       const sheet = {
         data: [],
         columns: [{
@@ -23,7 +23,6 @@ const List = props => {
       for (const property of Object.keys(schema.schema.properties)) {
         sheet.columns.push({
           title: property,
-          type: 'autocomplete',
           width: property.length * 15,
         });
       }
