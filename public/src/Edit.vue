@@ -11,13 +11,21 @@
             <div v-for="(error, index) in errors" :key="`error-${index}`">{{ error.message }}</div>
           </div>
         </div>
-        <div class="form-group" v-for="key in Object.keys(schema.schema.properties)" :key="`form-group-${key}`">
-          <label :for="key">{{ key }}</label>
-          <input :id="key" class="form-control" v-model="inputs[key]" />
+        <div class="form-group" v-for="key in Object.keys(schema.form)" :key="`form-group-${key}`">
+          <formulate-input
+            input-class="form-control"
+            :name="key"
+            :label="schema.form[key].label || key"
+            :type="schema.form[key].type || 'text'"
+            :options="schema.form[key].options"
+            :validation="schema.form[key].validation"
+            :disabled="schema.form[key].disabled? 'disabled': null"
+            v-model="inputs[key]"></formulate-input>
         </div>
       </div>
       <div class="card-footer">
         <button type="submit" class="btn btn-primary">Save</button>
+        <router-link :to="`/list/${resource}`" class="btn btn-dark">Cancel</router-link>
       </div>
     </form>
   </section>
@@ -29,7 +37,7 @@ module.exports = {
     return {
       resource: '',
       item: {},
-      schema: {schema: {properties: {}}},
+      schema: {form: {}},
       inputs: {},
       errors: [],
     };
@@ -39,7 +47,7 @@ module.exports = {
     this.resource = this.$route.params.resource;
     if (this.$route.params.id) {
       try {
-        this.item = (await axios.get(`/api/monedb/${this.resource}/${this.$route.params.id}`)).data;
+        this.item = (await axios.get(`/api/monedb/${this.resource}/${this.$route.params.id}`)).data[0];
       } catch (err) {
         this.item = {_id: null};
       }
@@ -50,7 +58,7 @@ module.exports = {
     this.schema = (await axios.get(`/api/monedb/@schemes?query=(filter:(name:${this.resource}))`)).data[0];
     this.inputs = {};
 
-    for (const key of Object.keys(this.schema.schema.properties)) {
+    for (const key of Object.keys(this.schema.form)) {
       this.inputs[key] = this.item[key] || '';
     }
   },
@@ -59,9 +67,8 @@ module.exports = {
     async saveData() {
       try {
         let res;
-        // clear empty inputs
-        Object.keys(this.inputs).map(key => this.inputs[key] === ''? delete this.inputs[key]: key);
-        console.log(this.inputs);
+        // clear empty|disabled inputs
+        Object.keys(this.inputs).map(key => this.inputs[key] === '' || this.schema.form[key].disabled? delete this.inputs[key]: key);
         if (this.item._id) {
           // update
           res = await axios.put(`/api/monedb/${this.resource}/${this.item._id}`, {data: this.inputs});
@@ -79,7 +86,7 @@ module.exports = {
         }
       } catch (err) {
         console.error(err);
-        // this.errors = err.response.data;
+        this.errors = err.response.data;
       }
     },
   },

@@ -41,6 +41,33 @@ module.exports = {
                 updated_at: {type: 'timestamp_updated'},
               },
             },
+            form: {
+              name: {
+                label: '著者名',
+                type: 'text',
+                validation: 'required|min:3|max:25',
+              },
+              sex: {
+                label: '性別',
+                type: 'select',
+                options: {
+                  male: '男性',
+                  female: '女性',
+                  unknown: '不明',
+                },
+                validation: 'required',
+              },
+              created_at: {
+                label: '登録日時',
+                type: 'text',
+                disabled: true,
+              },
+              updated_at: {
+                label: '更新日時',
+                type: 'text',
+                disabled: true,
+              },
+            },
           }
         })
       );

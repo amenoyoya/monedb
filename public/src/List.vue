@@ -14,7 +14,12 @@ module.exports = {
     return {
       resource: '',
     };
-  }, 
+  },
+  methods: {
+    deleteData() {
+      alert('delete');
+    }
+  },
   async mounted() {
     this.resource = this.$route.params.resource;
 
@@ -35,6 +40,7 @@ module.exports = {
       for (const property of Object.keys(schema.schema.properties)) {
         row.push(item[property]);
       }
+      row.push(`<button class="btn btn-info" id="editBtn" data-resource="${this.resource}" data-id="${item._id}">編集</button><button class="btn btn-danger" id="deleteBtn" data-resource="${this.resource}" data-id="${item._id}" @click.prevent="deleteData">削除</button>`);
       sheet.data.push(row);
     }
     for (const property of Object.keys(schema.schema.properties)) {
@@ -43,10 +49,31 @@ module.exports = {
         width: property.length * 15,
       });
     }
+    sheet.columns.push({
+      title: 'Action',
+      type: 'html',
+      width: 200,
+      readOnly: true,
+    });
     
     const table = jspreadsheet(document.getElementById('spreadsheet'), {
       data: sheet.data,
       columns: sheet.columns,
+    });
+
+    const router = this.$router;
+    
+    $('#editBtn').on('click', () => {
+      const btn = window.$('#editBtn');
+      router.push({path: `/edit/${btn.data('resource')}/${btn.data('id')}`});
+    });
+
+    $('#deleteBtn').on('click', async () => {
+      const btn = window.$('#deleteBtn');
+      const resource = btn.data('resource');
+      const deleted = (await axios.delete(`/api/monedb/${resource}/${btn.data('id')}`)).data;
+      window.alert(`${resource}: ${deleted._id} を削除しました`);
+      router.push({path: `/list/${resource}`, force: true});
     });
   }
 }
