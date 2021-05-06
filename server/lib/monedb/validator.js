@@ -40,7 +40,7 @@ class Validator {
     },
 
     /**
-     * format to auto-increment the value
+     * format the value to auto-incremental value
      * {type: 'increment'}
      */
     increment: async (data, column, {$collection, $prevData}) => {
@@ -65,8 +65,8 @@ class Validator {
     },
 
     /**
-     * validate if the value exists in database
-     * {type: 'exists', collection: {string} = undefined, key: {string} = '_id'}
+     * validate the value exists in database
+     * {type: 'exists', collection: string = undefined, key: string = '_id'}
      */
     exists: async (data, column, {$collection, collection, key}) => {
       const col = typeof collection === 'string'? $collection.database.collection(collection): $collection;
@@ -76,8 +76,8 @@ class Validator {
     },
 
     /**
-     * password hashing formatter
-     * {type: 'hash', salt: {int} = 10}
+     * format the value to hashed value
+     * {type: 'hash', salt: int = 10}
      */
     hash: (data, column, {salt}) => {
       if (data[column]) data[column] = bcrypt.hashSync(data[column], salt || 10);
@@ -85,7 +85,7 @@ class Validator {
 
     /**
      * set current datetime to the value formatter on only inserted
-     * {type: 'timestamp_inserted', format: {string} = 'YYYY-MM-DD HH:mm:ss'}
+     * {type: 'timestamp_inserted', format: string = 'YYYY-MM-DD HH:mm:ss'}
      */
     timestamp_inserted: (data, column, {$prevData, format}) => {
       // only set current date-time: on inserted (prevData is empty) and target value is empty
@@ -94,7 +94,7 @@ class Validator {
 
     /**
      * set current datetime to the value formatter
-     * {type: 'timestamp_updated', format: {string} = 'YYYY-MM-DD HH:mm:ss'}
+     * {type: 'timestamp_updated', format: string = 'YYYY-MM-DD HH:mm:ss'}
      */
     timestamp_updated: (data, column, {format}) => {
       if (!data[column]) data[column] = dayjs().format(format || 'YYYY-MM-DD HH:mm:ss');
