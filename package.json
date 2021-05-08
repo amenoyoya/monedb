@@ -1,6 +1,6 @@
 {
   "name": "monedb",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "MongoDB + NeDB Rest API Server, Validator",
   "license": "MIT",
   "main": "lib/monedb.js",
@@ -36,6 +36,11 @@
     "start": "run-p backend frontend"
   },
   "bin": {
-    "monedb-server": "./server/index.js"
-  }
+    "monedb-server": "./bin/monedb-server"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "server"
+  ]
 }

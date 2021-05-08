@@ -34,7 +34,7 @@ Recommended to set via [.env](./.env).
 
 ### Launch MoneDB REST API Server
 ```bash
-$ npm monedb-server
+$ yarn monedb-server
 
 # => http://localhost:8080/api/monedb/***
 ```

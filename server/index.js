@@ -1,5 +1,6 @@
 // process.env form ../.env
-require('dotenv').config({path: `${__dirname}/../.env`});
+// require('dotenv').config({path: `${__dirname}/../.env`});
+require('dotenv').config();
 
 (async () => {
   // fastify server
