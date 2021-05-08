@@ -40,7 +40,7 @@ require('dotenv').config({path: `${__dirname}/../.env`});
     prefix: '/api/monedb/'
   });
 
-  const port = process.env.NODE_PORT || 8080;
+  const port = process.env.BACKEND_PORT || 8080;
   fastify.listen(port, '0.0.0.0', () => {
     console.log(`Backend server\nListening on: http://localhost:${port}/`);
   });

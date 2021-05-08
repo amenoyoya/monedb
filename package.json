@@ -1,9 +1,9 @@
 {
   "name": "monedb",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MongoDB + NeDB Rest API Server, Validator",
   "license": "MIT",
-  "main": "server/index.js",
+  "main": "lib/monedb.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/amenoyoya/monedb.git"
@@ -11,7 +11,7 @@
   "author": {
     "name": "amenoyoya",
     "email": "mtyswe3@gmail.com",
-    "url": "https://yoyablog.com"
+    "url": "https://github.com/amenoyoya/monedb"
   },
   "dependencies": {
     "ajv": "^8.1.0",
@@ -24,15 +24,18 @@
     "fastify-swagger": "^4.7.0",
     "mongodb": "^3.6.6",
     "nedb-promises": "^4.1.2",
-    "npm-run-all": "^4.1.5",
     "rison": "^0.1.1"
   },
   "devDependencies": {
-    "http-server": "^0.12.3"
+    "http-server": "^0.12.3",
+    "npm-run-all": "^4.1.5"
   },
   "scripts": {
-    "backend": "node server/index.js",
+    "backend": "node ./server/index.js",
     "frontend": ". ./.env && http-server ./public/ -p $FRONTEND_PORT -P http://localhost:$BACKEND_PORT",
     "start": "run-p backend frontend"
+  },
+  "bin": {
+    "monedb-server": "./server/index.js"
   }
 }

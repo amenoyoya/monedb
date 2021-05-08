@@ -1,14 +1,14 @@
 const { stringify } = require('ajv');
 const rison = require('rison');
-const connectMoneDB = require('../lib/monedb');
-const omit = require('../lib/omit');
+const connectMoneDB = require('../../lib/monedb');
+const omit = require('../../lib/omit');
 
 module.exports = async (fastify, opts) => {
   // MoneDB database
   const db = await connectMoneDB(process.env.MONEDB_URL || __dirname, process.env.MONEDB_DATABASE || 'mone');
 
   // validatotion schemes collection name
-  const validator_collection = '@schemes';
+  const scheme_collection = process.env.MONEDB_SCHEMES_NAME || '@schemes';
 
   /**
    * GET /api/monedb/${collection}?query=${rison_query}
@@ -55,7 +55,7 @@ module.exports = async (fastify, opts) => {
       
       // find a list of data
       const paginator = {};
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       const data = await model.find(query, paginator);
 
       reply
@@ -121,7 +121,7 @@ module.exports = async (fastify, opts) => {
         return reply.code(400).send({error: 'payload.data must be a single, or list of object(s)'});
       }
       // insert data
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       reply.code(201).send(
         await model.insert(Array.isArray(request.body.data)? request.body.data: [request.body.data])
       ); // 201 CREATED
@@ -195,7 +195,7 @@ module.exports = async (fastify, opts) => {
       if (!request.body || typeof request.body.data !== 'object') {
         return reply.code(400).send({error: 'payload.data must be a object'});
       }
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       const prevData = await model.find({filter: request.body.filter});
       // insert data
       if (prevData.length === 0) {
@@ -253,7 +253,7 @@ module.exports = async (fastify, opts) => {
     try {
       const filter = (request.body && request.body.filter)? request.body.filter: {};
       // delete data
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       const prevData = await model.find({filter});
       const deleted = await model.delete(filter);
       if (deleted < prevData.length) {
@@ -311,7 +311,7 @@ module.exports = async (fastify, opts) => {
   }, async (request, reply) => {
     try {
       // find a single data
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       const data = await model.find({
         pagination: {page: 1, perPage: 1}, filter: {_id: +request.params.id}
       });
@@ -385,7 +385,7 @@ module.exports = async (fastify, opts) => {
       if (!request.body || typeof request.body.data !== 'object' || Array.isArray(request.body.data)) {
         return reply.code(400).send({error: 'payload.data must be a object'});
       }
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       const filter = {_id: +request.params.id};
       const prevData = await model.find({filter});
       if (prevData.length === 0) {
@@ -446,7 +446,7 @@ module.exports = async (fastify, opts) => {
     }
   }, async (request, reply) => {
     try {
-      const model = await db.model(request.params.collection, validator_collection);
+      const model = await db.model(request.params.collection, scheme_collection);
       const filter = {_id: +request.params.id};
       const prevData = await model.find({filter});
       if (prevData.length === 0) {

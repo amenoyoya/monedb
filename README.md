@@ -2,61 +2,42 @@
 
 ⚡ MongoDB + NeDB Rest API Server, Validator
 
-## Environment
+## Installation
 
-- Shell: `bash`
-- Docker: `19.03.12`
-    - docker-compose: `1.26.0`
+You can install via `npm` or `yarn`.
 
-### Setup
 ```bash
-# Add execution permission to the CLI tool
-$ chmod +x ./x
+$ npm install monedb
 
-# Build docker containers
-$ ./x build
+# or
 
-# Start docker containers
-$ ./x up -d
+$ yarn add monedb
 ```
 
-### Docker containers
-- networks:
-    - **appnet**: `local`
-        - All docker containers in this project will be belonged to this network
-- services:
-    - **node**: `node:14-slim`
-        - Node.js service container
-        - routes:
-            - HTTP:
-                - http://localhost:{$BACKEND_PORT:-8080} => http://node:{$BACKEND_PORT:-8080}
-                - http://localhost:{$FRONTEND_PORT:-8000} => http://node:{$FRONTEND_PORT:-8000}
-    - **mongodb**: `mongo:4.4`
-        - MongoDB service container
-        - routes:
-            - TCP: mongodb://root:root@mongodb:27017
-    - **express**: `mongo-express:latest`
-        - MongoDB WebUI service container
-        - routes:
-            - HTTP: http://localhost:{$MONGODB_EXPRESS_PORT:-27080} => http://express:8081
+## Usage
 
 ### Environment variables
-Set by [.env](./.env)
+Recommended to set via [.env](./.env).
 
-- `DEBUG`: boolean
+- `DEBUG`: boolean (default: `false`)
     - Set `true` for debug mode
-- `BACKEND_PORT`: number
-    - MoneDB Rest API endpoint port
-- `FRONTEND_PORT`: number
-    - Frontend HTTP server port
-- `MONGO_EXPRESS_PORT`: number
-    - MongoDB WebUI http port
-- `MONEDB_URL` string
+- `BACKEND_PORT`: number (default: `8080`)
+    - MoneDB REST API endpoint port
+- `MONEDB_URL` string (default: `${__dirname}`)
     - MongoDB mode: `mongodb://${user}:${password}@${mongodb_host}:${mongodb_port}`
     - NeDB mode: directory path to save
         - NeDB data file will be saved to: `/path/to/${MONEDB_URL}/${MONEDB_DATABASE}.db/${collection_name}.table`
-- `MONEDB_DATABASE`: string
+- `MONEDB_DATABASE`: string (default: `mone`)
     - MoneDB server database name
+- `MONEDB_SCHEMES_NAME`: string (default: `@schemes`)
+    - MoneDB validation schemes collection name
+
+### Launch MoneDB REST API Server
+```bash
+$ npm monedb-server
+
+# => http://localhost:8080/api/monedb/***
+```
 
 ***
 
@@ -104,7 +85,7 @@ Validation schema can be defined as the following format.
 }
 ```
 
-⚡ This schema must be inserted in MoneDB `@schemes` collection.
+⚡ This schema must be inserted into MoneDB `@schemes` (or collection designated via environmental value `MONEDB_SCHEMES_NAME`) collection.
 
 ### updating types
 In the extended Ajv format (`updating`), you can use the following types.
@@ -117,7 +98,7 @@ Process each value for the array
 
 ```javascript
 /**
- * http://monedb/api/monedb/@schemes?query=(name:'passwords')
+ * http://localhost:8080/api/monedb/@schemes?query=(name:'passwords')
  * {
  *   name: 'passwords',
  *   schema: {
@@ -134,7 +115,7 @@ Process each value for the array
  */
 
 (async () => {
-    await axios.post('http://monedb/api/monedb/passwords', {
+    await axios.post('http://localhost:8080/api/monedb/passwords', {
         data: {
             name: 'test',
             passwords: ['aaa', 'bbb']
@@ -142,7 +123,7 @@ Process each value for the array
     });
 })();
 /**
- * => http://monedb/api/monedb/passwords
+ * => http://localhost:8080/api/monedb/passwords
  * [
  *   {
  *     _id: 'nJkbiHenERenfXW3',
@@ -163,7 +144,7 @@ Format the value to auto-incremental value
 
 ```javascript
 /**
- * http://monedb/api/monedb/@schemes?query=(name:'users')
+ * http://localhost:8080/api/monedb/@schemes?query=(name:'users')
  * {
  *   name: 'users',
  *   schema: {
@@ -179,7 +160,7 @@ Format the value to auto-incremental value
  */
 
 (async () => {
-    await axios.post('http://monedb/api/monedb/users', {
+    await axios.post('http://localhost:8080/api/monedb/users', {
         data: [
             {name: 'John'},
             {name: 'Sara'},
@@ -188,7 +169,7 @@ Format the value to auto-incremental value
     });
 })();
 /**
- * => http://monedb/api/monedb/users
+ * => http://localhost:8080/api/monedb/users
  * [
  *   {
  *     _id: 1,
@@ -213,7 +194,7 @@ Validate the value is unique
 
 ```javascript
 /**
- * http://monedb/api/monedb/@schemes?query=(name:'users')
+ * http://localhost:8080/api/monedb/@schemes?query=(name:'users')
  * {
  *   name: 'users',
  *   schema: {
@@ -230,7 +211,7 @@ Validate the value is unique
 
 (async () => {
     console.log(
-        await axios.post('http://monedb/api/monedb/users', {
+        await axios.post('http://localhost:8080/api/monedb/users', {
             data: [
                 {name: 'John'},
                 {name: 'John'}, // <-- This `name` is duplicated
@@ -268,7 +249,7 @@ Validate the value exists in database
 
 ```javascript
 /**
- * http://monedb/api/monedb/@schemes?query=(name:'users')
+ * http://localhost:8080/api/monedb/@schemes?query=(name:'users')
  * {
  *   name: 'users',
  *   schema: {
@@ -288,7 +269,7 @@ Validate the value exists in database
 
 (async () => {
     console.log(
-        await axios.post('http://monedb/api/monedb/users', {
+        await axios.post('http://localhost:8080/api/monedb/users', {
             data: [
                 {name: 'John', friends: []}, // => users._id: 1
                 {name: 'Sara', friends: [1]}, // => friends[1] = users[_id=1] exists: OK, users._id: 2
@@ -327,7 +308,7 @@ Format the value to hashed value
 
 ```javascript
 /**
- * http://monedb/api/monedb/@schemes?query=(name:'administrators')
+ * http://localhost:8080/api/monedb/@schemes?query=(name:'administrators')
  * {
  *   name: 'administrators',
  *   schema: {
@@ -344,7 +325,7 @@ Format the value to hashed value
  */
 
 (async () => {
-    await axios.post('http://monedb/api/monedb/administrators', {
+    await axios.post('http://localhost:8080/api/monedb/administrators', {
         data: {
             name: 'test',
             password: 'pa$$wd'
@@ -352,7 +333,7 @@ Format the value to hashed value
     });
 })();
 /**
- * => http://monedb/api/monedb/administrators
+ * => http://localhost:8080/api/monedb/administrators
  * [
  *   {
  *     _id: 'nJkbiHenERenfXW3',
@@ -375,7 +356,7 @@ Set the current date-time to the value
 
 ```javascript
 /**
- * http://monedb/api/monedb/@schemes?query=(name:'logs')
+ * http://localhost:8080/api/monedb/@schemes?query=(name:'logs')
  * {
  *   name: 'logs',
  *   schema: {
@@ -395,7 +376,7 @@ Set the current date-time to the value
  */
 
 (async () => {
-    await axios.post('http://monedb/api/monedb/logs', {
+    await axios.post('http://localhost:8080/api/monedb/logs', {
         data: { title: 'test', log: 'created'}
     });
     /**
@@ -410,7 +391,7 @@ Set the current date-time to the value
      * ]
      */
 
-    await axios.put('http://monedb/api/monedb/logs', {
+    await axios.put('http://localhost:8080/api/monedb/logs', {
         filter: { title: 'test' },
         data: { log: 'updated'}
     });
@@ -427,3 +408,54 @@ Set the current date-time to the value
      */
 })();
 ```
+
+***
+
+## Development Environment
+
+- Shell: `bash`
+- Docker: `19.03.12`
+    - docker-compose: `1.26.0`
+
+### Setup
+```bash
+# clone this repository
+$ git clone https://github.com/amenoyoya/monedb
+
+$ cd ./monedb
+
+# Add execution permission to the CLI tool
+$ chmod +x ./x
+
+# Build docker containers
+$ ./x build
+
+# Start docker containers
+$ ./x up -d
+```
+
+### Docker containers
+- networks:
+    - **appnet**: `local`
+        - All docker containers in this project will be belonged to this network
+- services:
+    - **node**: `node:14-slim`
+        - Node.js service container
+        - routes:
+            - HTTP:
+                - http://localhost:{$BACKEND_PORT:-8080} => http://node:{$BACKEND_PORT:-8080}
+                - http://localhost:{$FRONTEND_PORT:-8000} => http://node:{$FRONTEND_PORT:-8000}
+    - **mongodb**: `mongo:4.4`
+        - MongoDB service container
+        - routes:
+            - TCP: mongodb://root:root@mongodb:27017
+    - **express**: `mongo-express:latest`
+        - MongoDB WebUI service container
+        - routes:
+            - HTTP: http://localhost:{$MONGODB_EXPRESS_PORT:-27080} => http://express:8081
+
+### Environment variables (only for development environment)
+- `FRONTEND_PORT`: number (default: `8000`)
+    - Frontend HTTP server port
+- `MONGO_EXPRESS_PORT`: number (default: `27080`)
+    - MongoDB WebUI http port
